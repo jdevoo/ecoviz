@@ -1,0 +1,259 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/>
+<title>ecoviz</title>
+<link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/morris.js/0.5.1/morris.css">
+<link rel="stylesheet" href="//openlayers.org/en/v3.20.1/css/ol.css" type="text/css">
+<script src="//openlayers.org/en/v3.20.1/build/ol.js"></script>
+<script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.0/jquery.min.js"></script>
+<script src="//cdnjs.cloudflare.com/ajax/libs/raphael/2.1.0/raphael-min.js"></script>
+<script src="//cdnjs.cloudflare.com/ajax/libs/morris.js/0.5.1/morris.min.js"></script>
+<script type="text/javascript">
+jQuery(function() {
+  var getParameter = function(name) {
+    var query = location.search.substring(1);
+    var res;
+    jQuery.each(query.split('&'), function(i, pair) {
+      var p = pair.split('=');
+      if (p[0] == name) {
+        res = decodeURIComponent(p[1]);
+        return true;
+      }
+    });
+    return res;
+  }
+  var fusionTableId = getParameter('table');
+  var fusionTablesKey = getParameter('key');
+
+  var toFeatureArray = function(data) {
+    var row, feature, features = [];
+    var cols = data.columns;
+    for (var i = 0; i < data.rows.length; i++) {
+      row = data.rows[i];
+      feature = new ol.Feature();
+      feature.setId(i);
+      for (var j = 0; j < cols.length; j++) {
+        feature.set(cols[j], row[j]);
+      }
+      feature.setGeometry(new ol.geom.Point(
+        ol.proj.fromLonLat([feature.get('Lon'), feature.get('Lat')])
+      ));
+      feature.unset('Lon');
+      feature.unset('Lat');
+      features.push(feature);
+    }
+    return features;
+  }
+  var tableSource = new ol.source.Vector({
+    format: new ol.format.GeoJSON(),
+    loader: function(extent, res, proj) {
+      var url = 'https://www.googleapis.com/fusiontables/v1/query?sql=select * from ' + fusionTableId + '&key=' + fusionTablesKey;
+      jQuery.ajax({
+        url: url,
+        success: function(data) {
+          tableSource.addFeatures(toFeatureArray(data));
+          map.getView().fit(tableSource.getExtent(), map.getSize());
+        },
+        error: function(err) {
+          console.log(err.responseText);
+        }
+      });
+    },
+    strategy: ol.loadingstrategy.all,
+    attributions: new ol.Attribution({'html': 'citizensensing.cc'})
+  });
+  tableSource.on('change', function(evt) {
+    if (tableSource.getState() == 'ready') {
+      jQuery('#loading').hide();
+      graph1.setData(jQuery.map(tableSource.getFeatures(), function(f) {
+        return({
+          'ts': f.get('ts'),
+          'NOx': f.get('NOx'),
+          'COx': f.get('COx')
+        })
+      }));
+      graph2.setData(jQuery.map(tableSource.getFeatures(), function(f) {
+        return({
+          'ts': f.get('ts'),
+          'Noise': f.get('Noise')
+        })
+      }));
+    }
+  });
+
+  var regularStyle = new ol.style.Style({
+    image: new ol.style.Circle({
+      radius: 3,
+      stroke: new ol.style.Stroke({width: 2, color: "#ff0" }),
+      fill: new ol.style.Fill({color: "#ff0"})
+    })
+  });
+  var highlightedStyle = new ol.style.Style({
+    image: new ol.style.Icon({
+      opacity: 1,
+      src: '/img/select.png'
+    })
+  });
+  var highlightLayer = new ol.layer.Vector({
+    source: new ol.source.Vector(),
+    style: highlightedStyle
+  });
+  var map = new ol.Map({
+    target: 'map',
+    layers: [
+      new ol.layer.Tile({
+        source: new ol.source.OSM()
+      }),
+      new ol.layer.Vector({
+        source: tableSource,
+        style: regularStyle
+      }),
+      highlightLayer
+    ],
+    view: new ol.View({
+      center: ol.proj.transform([0 ,0], 'EPSG:4326', 'EPSG:3857'),
+      zoom: 1
+    }),
+    interactions: ol.interaction.defaults({
+      mouseWheelZoom: false,
+      keyboard: false
+    }),
+    controls: ol.control.defaults({
+      attributionOptions: {target: 'attribution'}
+    })
+  });
+  map.on('pointermove', function(evt) {
+    if (evt.dragging) {
+      return;
+    }
+    highlightFeature(evt);
+  });
+
+  var graph1 = new Morris.Line({
+    element: 'graph1',
+    xkey: 'ts',
+    ykeys: ['COx', 'NOx'],
+    labels: ['COx', 'NOx'],
+    lineColors: ['#f00', '#0f0'],
+    hideHover: true,
+    pointSize: 0,
+    lineWidth: 2,
+    smooth: false,
+    postUnits: 'V',
+    gridTextColor: '#000'
+  });
+  graph1.el.bind('mousemove', function(evt) {
+    highlightFeature(evt);
+  });
+  graph1.el.bind('mouseout', function(evt) {
+    highlightLayer.getSource().clear();
+    graph2.displayHoverForRow(null);
+  });
+
+  var graph2 = new Morris.Line({
+    element: 'graph2',
+    xkey: 'ts',
+    ykeys: ['Noise'],
+    labels: ['Noise'],
+    lineColors: ['#00f'],
+    hideHover: true,
+    pointSize: 0,
+    lineWidth: 2,
+    smooth: false,
+    postUnits: 'dB',
+    gridTextColor: '#000'
+  });
+  graph2.el.bind('mousemove', function(evt) {
+    highlightFeature(evt);
+  });
+  graph2.el.bind('mouseout', function(evt) {
+    highlightLayer.getSource().clear();
+    graph1.displayHoverForRow(null);
+  });
+
+  var highlightFeature = function(evt) {
+    if (tableSource.getFeatures().length == 0) {
+      return;
+    }
+    highlightLayer.getSource().clear();
+    graph1.displayHoverForRow(null);
+    graph2.displayHoverForRow(null);
+    switch (evt.type) {
+      case 'pointermove':
+        var pixel = map.getEventPixel(evt.originalEvent);
+        var feature = map.forEachFeatureAtPixel(pixel, function(feature) {
+          return feature;
+        });
+        if (feature) {
+          highlightLayer.getSource().addFeature(feature);
+          var idx = feature.getId();
+          graph1.displayHoverForRow(idx);
+          graph2.displayHoverForRow(idx);
+        }
+        break;
+      case 'mousemove':
+        var x = evt.pageX - graph1.el.offset().left;
+        var idx = graph1.hitTest(x);
+        graph1.displayHoverForRow(idx);
+        graph2.displayHoverForRow(idx);
+        highlightLayer.getSource().addFeature(tableSource.getFeatureById(idx));
+        break;
+    }
+  }
+
+  var changeTable = function(evt) {
+    if (/^([a-zA-Z0-9-_]){40,41}$/.test(evt.data)) {
+      fusionTableId = evt.data;
+      tableSource.clear();
+      jQuery('#loading').show();
+    }
+  }
+  if (window.addEventListener) {
+    window.addEventListener('message', changeTable, false);
+  } else {
+    window.attachEvent('onmessage', changeTable, false);
+  }
+});
+</script>
+<style type="text/css">
+body {
+  margin: 0px;
+  padding: 0px;
+  background-color: #f2efe9;
+  font-family: "Lucida Grande", "Tahoma", "Helvetica", "Arial", sans-serif;
+  font-size: 80%;
+}
+#loading {
+  position: absolute;
+  right: 0;
+  width: 32px;
+  height: 32px;
+  background: url("/img/loading.gif");
+  z-index: 10;
+}
+#map {
+  width: 650px;
+  height: 400px;
+}
+#graph1, #graph2 {
+  width: 650px;
+  height: 200px;
+}
+#license {
+  margin-left: 10px;
+  color: #888;
+}
+</style>
+</head>
+<body>
+<div id="loading"></div>
+<div id="map"></div>
+<div id="graph1"></div>
+<div id="graph2"></div>
+<div id="license">
+  <a rel="license" href="http://creativecommons.org/licenses/by/3.0/" target="_blank"><img alt="Creative Commons Licence" style="border-width:0" src="http://i.creativecommons.org/l/by/3.0/80x15.png" /></a><br/>This material is licensed under a <a rel="license" href="http://creativecommons.org/licenses/by/3.0/" target="_blank">Creative Commons Attribution 3.0 Unported License</a>.
+</div>
+<div id="attribution"></div>
+</body>
+</html>
