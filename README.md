@@ -1,13 +1,13 @@
 # ecoviz widget
 
-This JavaScritp widget retrieves and displays air quality and noise data from Google Fusion Tables. It is invoked using an IFRAME tag as follows. Pass your table id and key accordingly.
+This JavaScritp widget retrieves and displays air quality and noise data from a CSV file accessible via an URL. It is invoked using an IFRAME tag as follows.
 
 ```
-<iframe id="ecoviz" width="650" height="840" scrolling="no" marginheight="0" marginwidth="0" frameborder="0" src="/widget/ecoviz.html?table=YOUR_TABLE_ID&key=YOUR_KEY">
+<iframe id="ecoviz" width="650" height="840" scrolling="no" marginheight="0" marginwidth="0" frameborder="0" src="/widget/ecoviz.html?url=CSV_DATA">
 </iframe>
 ```
 
-The Google Fusion table returns the following attributes for each measurement:
+The CSV file must return the following attributes for each measurement:
 
 * ts
 * Lon
