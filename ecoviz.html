@@ -31,12 +31,12 @@ jQuery(function() {
     if (rows.length <= 1) {
       return features;
     }
-    var cols = rows[0].split(',');
+    var cols = rows[0].split(',').map(s => s.trim());
     if (cols.length != 6) {
       return features;
     }
     for (var i = 1; i < rows.length; i++) {
-      row = rows[i].split(',');
+      row = rows[i].split(',').map(s => s.trim());
       if (row.length == cols.length) {
         feature = new ol.Feature();
         feature.setId(i-1);
@@ -113,7 +113,7 @@ jQuery(function() {
   var highlightedStyle = new ol.style.Style({
     image: new ol.style.Icon({
       opacity: 1,
-      src: '/img/select.png'
+      src: 'select.png'
     })
   });
   var highlightLayer = new ol.layer.Vector({
@@ -248,7 +248,7 @@ body {
   right: 0;
   width: 32px;
   height: 32px;
-  background: url("/img/loading.gif");
+  background: url("loading.gif");
   z-index: 10;
 }
 #map {
@@ -271,11 +271,11 @@ body {
 <div id="graph1"></div>
 <div id="graph2"></div>
 <div id="license">
-  <a rel="license" href="http://creativecommons.org/licenses/by/3.0/" target="_blank">
-    <img alt="Creative Commons Licence" style="border-width:0" src="http://i.creativecommons.org/l/by/3.0/80x15.png" />
+  <a rel="license" href="https://creativecommons.org/licenses/by/3.0/" target="_blank">
+    <img alt="Creative Commons Licence" style="border-width:0" src="https://i.creativecommons.org/l/by/3.0/80x15.png" />
   </a>
   <br/>This material is licensed under a 
-  <a rel="license" href="http://creativecommons.org/licenses/by/3.0/" target="_blank">
+  <a rel="license" href="https://creativecommons.org/licenses/by/3.0/" target="_blank">
     Creative Commons Attribution 3.0 Unported License
   </a>.
 </div>
